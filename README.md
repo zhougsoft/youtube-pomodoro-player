@@ -2,6 +2,10 @@
 
 a vibe-coded app for listening to youtube & locking-in on tasks that interrupts you when it's time to take a break; sessions currently hardcoded at 20 minutes.
 
+<video src="https://github.com/user-attachments/assets/34f80e9c-e0a4-474e-9feb-a49d8c4814d8?raw=true"></video>
+
+---
+
 ## run locally
 
 - install deps: `npm install`
