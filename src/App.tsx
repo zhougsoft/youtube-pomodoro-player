@@ -2,23 +2,34 @@ import { useState, useEffect, useRef } from 'react'
 import YouTubeEmbed, { type YouTubeEmbedRef } from './YouTubeEmbed'
 import './App.css'
 
-const POMODORO_DURATION = 20 * 60 // 20 minutes in seconds
+const POMODORO_DURATION = 60 * 20 // 20 minutes in seconds
 
 type Phase = 'Pomodoro' | 'Short Break' | 'Long Break'
 
+const formatTime = (time: number) => {
+  const minutes = Math.floor(time / 60)
+  const seconds = time % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`
+}
+
 function App() {
-  const [timeRemaining, setTimeRemaining] = useState(POMODORO_DURATION)
-  const [isActive, setIsActive] = useState(false)
-  const [isCountingDown, setIsCountingDown] = useState(false)
-  const [phase, setPhase] = useState<Phase>('Pomodoro')
-  const [pomodoroCount, setPomodoroCount] = useState(0)
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [videoId, setVideoId] = useState('')
+  const [pomodoroCount, setPomodoroCount] = useState(0)
+  const [phase, setPhase] = useState<Phase>('Pomodoro')
+  const [timeRemaining, setTimeRemaining] = useState(POMODORO_DURATION)
+  const [isCountingDown, setIsCountingDown] = useState(false)
+  const [isActive, setIsActive] = useState(false)
 
   const youtubeRef = useRef<YouTubeEmbedRef>(null)
-
-  const intervalRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const intervalRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    audioRef.current = new Audio()
+  }, [])
 
   const playSound = (soundFile: string, onEndedCallback?: () => void) => {
     if (audioRef.current) {
@@ -26,45 +37,6 @@ function App() {
       audioRef.current.onended = onEndedCallback || null
       audioRef.current.play()
     }
-  }
-
-  useEffect(() => {
-    audioRef.current = new Audio() // Initialize Audio object
-  }, [])
-
-  useEffect(() => {
-    if (isActive && timeRemaining > 0) {
-      intervalRef.current = window.setInterval(() => {
-        setTimeRemaining(prevTime => prevTime - 1)
-      }, 1000)
-    } else if (!isActive && intervalRef.current) {
-      clearInterval(intervalRef.current)
-    } else if (isActive && timeRemaining === 0) {
-      playSound('time_is_up.mp3')
-      handlePhaseEnd()
-    }
-
-    if (timeRemaining === 5 * 60 && phase === 'Pomodoro') {
-      playSound('5_mins_remaining.mp3')
-    } else if (timeRemaining === 1 * 60 && phase === 'Pomodoro') {
-      playSound('1_min_remaining.mp3')
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [isActive, timeRemaining, phase])
-
-  const handlePhaseEnd = () => {
-    if (phase === 'Pomodoro') {
-      setPomodoroCount(prevCount => prevCount + 1)
-    }
-    setPhase('Pomodoro')
-    setTimeRemaining(POMODORO_DURATION)
-    youtubeRef.current?.pauseVideo()
-    setIsActive(false)
   }
 
   const startTimer = () => {
@@ -109,27 +81,53 @@ function App() {
     }
   }
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = time % 60
-    return `${minutes.toString().padStart(2, '0')}:${seconds
-      .toString()
-      .padStart(2, '0')}`
-  }
+  useEffect(() => {
+    if (isActive && timeRemaining > 0) {
+      intervalRef.current = window.setInterval(() => {
+        setTimeRemaining(prevTime => prevTime - 1)
+      }, 1000)
+    } else if (!isActive && intervalRef.current) {
+      clearInterval(intervalRef.current)
+    } else if (isActive && timeRemaining === 0) {
+      playSound('time_is_up.mp3')
+
+      if (phase === 'Pomodoro') {
+        setPomodoroCount(prevCount => prevCount + 1)
+      }
+
+      setPhase('Pomodoro')
+      setTimeRemaining(POMODORO_DURATION)
+      youtubeRef.current?.pauseVideo()
+      setIsActive(false)
+    }
+
+    if (timeRemaining === 5 * 60 && phase === 'Pomodoro') {
+      playSound('5_mins_remaining.mp3')
+    } else if (timeRemaining === 1 * 60 && phase === 'Pomodoro') {
+      playSound('1_min_remaining.mp3')
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [isActive, timeRemaining, phase])
 
   useEffect(() => {
     const extractVideoId = (url: string) => {
       const youtubeRegex =
-        /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+        /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
       const match = url.match(youtubeRegex)
       return match ? match[1] : ''
     }
+
     setVideoId(extractVideoId(youtubeUrl))
   }, [youtubeUrl])
 
   return (
     <div className="pomodoro-app">
-      <h1>Pomodoro Timer</h1>
+      <h1>Youtube Pomodoro Player</h1>
       <div className="youtube-input">
         <input
           type="text"
