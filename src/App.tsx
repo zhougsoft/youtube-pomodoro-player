@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import YouTubeEmbed, { type YouTubeEmbedRef } from './YouTubeEmbed'
 import './App.css'
 
 const POMODORO_DURATION = 20 * 60 // 20 minutes in seconds
@@ -7,10 +8,14 @@ type Phase = 'Pomodoro' | 'Short Break' | 'Long Break'
 
 function App() {
   const [timeRemaining, setTimeRemaining] = useState(POMODORO_DURATION)
-  const [isActive, setIsActive] = useState(false);
-  const [isCountingDown, setIsCountingDown] = useState(false);
+  const [isActive, setIsActive] = useState(false)
+  const [isCountingDown, setIsCountingDown] = useState(false)
   const [phase, setPhase] = useState<Phase>('Pomodoro')
   const [pomodoroCount, setPomodoroCount] = useState(0)
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [videoId, setVideoId] = useState('')
+
+  const youtubeRef = useRef<YouTubeEmbedRef>(null)
 
   const intervalRef = useRef<number | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -58,33 +63,41 @@ function App() {
     }
     setPhase('Pomodoro')
     setTimeRemaining(POMODORO_DURATION)
+    youtubeRef.current?.pauseVideo()
     setIsActive(false)
   }
 
   const startTimer = () => {
-    setIsCountingDown(true);
-    playSound('starting_countdown.mp3', () => {
-      setIsActive(true);
-      setIsCountingDown(false);
-    });
-  };
+    if (timeRemaining < POMODORO_DURATION && timeRemaining > 0) {
+      setIsActive(true)
+      youtubeRef.current?.playVideo()
+    } else {
+      setIsCountingDown(true)
+      playSound('starting_countdown.mp3', () => {
+        setIsActive(true)
+        setIsCountingDown(false)
+        youtubeRef.current?.playVideo()
+      })
+    }
+  }
 
   const cancelTimer = () => {
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
-    setIsActive(false);
-    setIsCountingDown(false);
-    setPhase('Pomodoro');
-    setTimeRemaining(POMODORO_DURATION);
+    setIsActive(false)
+    setIsCountingDown(false)
+    setPhase('Pomodoro')
+    setTimeRemaining(POMODORO_DURATION)
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearInterval(intervalRef.current)
     }
-  };
+  }
 
   const pauseTimer = () => {
     setIsActive(false)
+    youtubeRef.current?.pauseVideo()
   }
 
   const resetTimer = () => {
@@ -104,22 +117,52 @@ function App() {
       .padStart(2, '0')}`
   }
 
+  useEffect(() => {
+    const extractVideoId = (url: string) => {
+      const youtubeRegex =
+        /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+      const match = url.match(youtubeRegex)
+      return match ? match[1] : ''
+    }
+    setVideoId(extractVideoId(youtubeUrl))
+  }, [youtubeUrl])
+
   return (
-    <div className='pomodoro-app'>
+    <div className="pomodoro-app">
       <h1>Pomodoro Timer</h1>
-      <div className='phase-display'>{phase}</div>
-      <div className='timer-display'>{formatTime(timeRemaining)}</div>
-      <div className='controls'>
+      <div className="youtube-input">
+        <input
+          type="text"
+          placeholder="Enter YouTube URL"
+          value={youtubeUrl}
+          onChange={e => setYoutubeUrl(e.target.value)}
+        />
+      </div>
+      {videoId && <YouTubeEmbed ref={youtubeRef} videoId={videoId} />}
+      <div className="phase-display">{phase}</div>
+      <div className="timer-display">{formatTime(timeRemaining)}</div>
+      <div className="controls">
         {isCountingDown ? (
-          <button onClick={cancelTimer} className="cancel-button">Cancel</button>
+          <button onClick={cancelTimer} className="cancel-button">
+            Cancel
+          </button>
         ) : !isActive ? (
-          <button onClick={startTimer}>Start</button>
+          <button onClick={startTimer}>
+            {timeRemaining < POMODORO_DURATION ? 'Resume' : 'Start'}
+          </button>
         ) : (
           <button onClick={pauseTimer}>Pause</button>
         )}
-        <button onClick={resetTimer} disabled={isCountingDown}>Reset</button>
+        <button
+          onClick={resetTimer}
+          disabled={
+            isCountingDown || isActive || timeRemaining === POMODORO_DURATION
+          }
+        >
+          Reset
+        </button>
       </div>
-      <div className='pomodoro-count'>Pomodoros Completed: {pomodoroCount}</div>
+      <div className="pomodoro-count">Pomodoros Completed: {pomodoroCount}</div>
     </div>
   )
 }

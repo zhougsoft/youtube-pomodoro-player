@@ -64,3 +64,21 @@ h1 {
   font-size: 1.2em;
   color: #aaa;
 }
+
+.youtube-input {
+  margin-bottom: 20px;
+}
+
+.youtube-input input {
+  width: 400px;
+  padding: 10px;
+  font-size: 1em;
+  border-radius: 5px;
+  border: 1px solid #61dafb;
+  background-color: #3a3f47;
+  color: white;
+}
+
+.youtube-embed-container {
+  margin-bottom: 20px;
+}
