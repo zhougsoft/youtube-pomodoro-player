@@ -1,7 +1,14 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
-interface YouTubeEmbedProps {
-  videoId: string
+const YOUTUBE_HOST = 'https://www.youtube.com'
+const SCRIPT_SRC = 'https://www.youtube.com/iframe_api'
+const PAGE_ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
+
+declare global {
+  interface Window {
+    YT: any
+    onYouTubeIframeAPIReady: () => void
+  }
 }
 
 export interface YouTubeEmbedRef {
@@ -9,49 +16,90 @@ export interface YouTubeEmbedRef {
   pauseVideo: () => void
 }
 
+let apiPromise: Promise<void> | null = null
+
+function loadYouTubeAPI(): Promise<void> {
+  if (apiPromise) return apiPromise
+
+  apiPromise = new Promise<void>((resolve, reject) => {
+    if (window.YT && window.YT.Player) {
+      resolve()
+      return
+    }
+
+    window.onYouTubeIframeAPIReady = () => resolve()
+
+    if (!document.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
+      const script = document.createElement('script')
+      script.src = SCRIPT_SRC
+      script.async = true
+      script.onerror = reject
+      document.head.appendChild(script)
+    }
+  })
+
+  return apiPromise
+}
+
+interface YouTubeEmbedProps {
+  videoId: string
+}
+
 const YouTubeEmbed = forwardRef<YouTubeEmbedRef, YouTubeEmbedProps>(
   ({ videoId }, ref) => {
-    const iframeRef = useRef<HTMLIFrameElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
+    const playerRef = useRef<any>(null)
+
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+      console.error(`YouTubeEmbed: invalid video id \"${videoId}\"`)
+      return null
+    }
 
     useImperativeHandle(ref, () => ({
-      playVideo: () => {
-        if (iframeRef.current) {
-          iframeRef.current.contentWindow?.postMessage(
-            '{"event":"command","func":"playVideo","args":""}',
-            '*'
-          )
-        }
-      },
-      pauseVideo: () => {
-        if (iframeRef.current) {
-          iframeRef.current.contentWindow?.postMessage(
-            '{"event":"command","func":"pauseVideo","args":""}',
-            '*'
-          )
-        }
-      },
+      playVideo: () => playerRef.current?.playVideo(),
+      pauseVideo: () => playerRef.current?.pauseVideo(),
     }))
 
     useEffect(() => {
-      // This effect ensures the iframe is ready to receive commands
-      // In a more robust implementation, you'd listen for the YouTube Iframe API's onReady event.
-      // For this project's scope, we'll assume it's ready shortly after mounting.
+      let cancelled = false
+
+      loadYouTubeAPI()
+        .then(() => {
+          if (cancelled || !containerRef.current) return
+
+          const playerVars: Record<string, any> = {
+            origin: PAGE_ORIGIN,
+            modestbranding: 1,
+            rel: 0,
+            loop: 1,
+            playlist: videoId,
+          }
+
+          playerRef.current = new window.YT.Player(containerRef.current, {
+            host: YOUTUBE_HOST,
+            videoId,
+            playerVars,
+            events: {
+              onReady: (event: any) => {
+                const iframe = event.target.getIframe() as HTMLIFrameElement
+                iframe.setAttribute(
+                  'sandbox',
+                  'allow-scripts allow-same-origin allow-presentation'
+                )
+                iframe.setAttribute('title', `YouTube video ${videoId}`)
+              },
+            },
+          })
+        })
+        .catch(err => console.error('YouTubeEmbed: failed to load API', err))
+
+      return () => {
+        cancelled = true
+        playerRef.current?.destroy?.()
+      }
     }, [videoId])
 
-    return (
-      <div className="youtube-embed-container">
-        <iframe
-          ref={iframeRef}
-          width="560"
-          height="315"
-          src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=0`}
-          frameBorder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          title="YouTube video player"
-        ></iframe>
-      </div>
-    )
+    return <div ref={containerRef} className="youtube-embed-container" />
   }
 )
 
