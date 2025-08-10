@@ -1,6 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
-const YOUTUBE_HOST = 'https://www.youtube.com'
 const SCRIPT_SRC = 'https://www.youtube.com/iframe_api'
 const PAGE_ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
 
@@ -51,7 +50,7 @@ const YouTubeEmbed = forwardRef<YouTubeEmbedRef, YouTubeEmbedProps>(
     const playerRef = useRef<any>(null)
 
     if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-      console.error(`YouTubeEmbed: invalid video id \"${videoId}\"`)
+      console.error(`YouTubeEmbed: invalid video id "${videoId}"`)
       return null
     }
 
@@ -73,20 +72,20 @@ const YouTubeEmbed = forwardRef<YouTubeEmbedRef, YouTubeEmbedProps>(
             rel: 0,
             loop: 1,
             playlist: videoId,
+            playsinline: 1,
           }
 
           playerRef.current = new window.YT.Player(containerRef.current, {
-            host: YOUTUBE_HOST,
             videoId,
             playerVars,
             events: {
               onReady: (event: any) => {
                 const iframe = event.target.getIframe() as HTMLIFrameElement
-                iframe.setAttribute(
-                  'sandbox',
-                  'allow-scripts allow-same-origin allow-presentation'
-                )
                 iframe.setAttribute('title', `YouTube video ${videoId}`)
+                iframe.setAttribute(
+                  'allow',
+                  'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
+                )
               },
             },
           })
