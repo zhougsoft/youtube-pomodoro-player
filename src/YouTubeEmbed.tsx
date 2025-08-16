@@ -1,43 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
+import YouTube, { type YouTubeProps } from 'react-youtube'
 
-const SCRIPT_SRC = 'https://www.youtube.com/iframe_api'
-const PAGE_ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
-
-declare global {
-  interface Window {
-    YT: any
-    onYouTubeIframeAPIReady: () => void
-  }
-}
+const PAGE_ORIGIN =
+  typeof window !== 'undefined' ? window.location.origin : undefined
 
 export interface YouTubeEmbedRef {
   playVideo: () => void
   pauseVideo: () => void
-}
-
-let apiPromise: Promise<void> | null = null
-
-function loadYouTubeAPI(): Promise<void> {
-  if (apiPromise) return apiPromise
-
-  apiPromise = new Promise<void>((resolve, reject) => {
-    if (window.YT && window.YT.Player) {
-      resolve()
-      return
-    }
-
-    window.onYouTubeIframeAPIReady = () => resolve()
-
-    if (!document.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
-      const script = document.createElement('script')
-      script.src = SCRIPT_SRC
-      script.async = true
-      script.onerror = reject
-      document.head.appendChild(script)
-    }
-  })
-
-  return apiPromise
 }
 
 interface YouTubeEmbedProps {
@@ -46,59 +15,61 @@ interface YouTubeEmbedProps {
 
 const YouTubeEmbed = forwardRef<YouTubeEmbedRef, YouTubeEmbedProps>(
   ({ videoId }, ref) => {
-    const containerRef = useRef<HTMLDivElement>(null)
-    const playerRef = useRef<any>(null)
-
     if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
       console.error(`YouTubeEmbed: invalid video id "${videoId}"`)
       return null
     }
 
+    const playerRef = useRef<any>(null)
+
     useImperativeHandle(ref, () => ({
-      playVideo: () => playerRef.current?.playVideo(),
-      pauseVideo: () => playerRef.current?.pauseVideo(),
+      playVideo: () => playerRef.current?.playVideo?.(),
+      pauseVideo: () => playerRef.current?.pauseVideo?.(),
     }))
 
-    useEffect(() => {
-      let cancelled = false
+    const opts: YouTubeProps['opts'] = useMemo(
+      () => ({
+        playerVars: {
+          origin: PAGE_ORIGIN,
+          modestbranding: 1,
+          rel: 0,
+          loop: 1,
+          playlist: videoId, // required by YT for single-video looping
+          playsinline: 1,
+        },
+      }),
+      [videoId]
+    )
 
-      loadYouTubeAPI()
-        .then(() => {
-          if (cancelled || !containerRef.current) return
+    const onReady: YouTubeProps['onReady'] = event => {
+      playerRef.current = event.target
 
-          const playerVars: Record<string, any> = {
-            origin: PAGE_ORIGIN,
-            modestbranding: 1,
-            rel: 0,
-            loop: 1,
-            playlist: videoId,
-            playsinline: 1,
-          }
+      // @ts-ignore
+      const iframe = event.target.getIframe?.() as HTMLIFrameElement | undefined
 
-          playerRef.current = new window.YT.Player(containerRef.current, {
-            videoId,
-            playerVars,
-            events: {
-              onReady: (event: any) => {
-                const iframe = event.target.getIframe() as HTMLIFrameElement
-                iframe.setAttribute('title', `YouTube video ${videoId}`)
-                iframe.setAttribute(
-                  'allow',
-                  'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
-                )
-              },
-            },
-          })
-        })
-        .catch(err => console.error('YouTubeEmbed: failed to load API', err))
-
-      return () => {
-        cancelled = true
-        playerRef.current?.destroy?.()
+      if (iframe) {
+        iframe.setAttribute('title', `YouTube video ${videoId}`)
+        iframe.setAttribute(
+          'allow',
+          'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
+        )
       }
-    }, [videoId])
+    }
 
-    return <div ref={containerRef} className="youtube-embed-container" />
+    const onError: YouTubeProps['onError'] = event => {
+      console.error('YouTubeEmbed: player error', event?.data ?? event)
+    }
+
+    return (
+      <div className="youtube-embed-container">
+        <YouTube
+          videoId={videoId}
+          opts={opts}
+          onReady={onReady}
+          onError={onError}
+        />
+      </div>
+    )
   }
 )
 
